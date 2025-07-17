@@ -1,0 +1,32 @@
+[project]
+name = "chronolog"
+version = "0.1"
+description = "Logger with elpased time calculation."
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [{ name = "Liudas Sodonis" }]
+license = "Apache-2.0"
+classifiers = []
+dependencies = []
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["chronolog*"]
+
+[dependency-groups]
+dev = ["pytest>=8.3.5"]
+
+[project.urls]
+Homepage = "https://github.com/jls-team/chronolog"
+Changelog = "https://github.com/jls-team/chronolog/releases"
+Issues = "https://github.com/jls-team/chronolog/issues"
+CI = "https://github.com/jls-team/chronolog/actions"
+
+
+[project.optional-dependencies]
+test = ["pytest"]
+google = ["google-cloud-logging>=3.12.1"]
