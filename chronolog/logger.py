@@ -4,7 +4,6 @@ A custom logging utility that provides a centralized logging configuration that 
 all log messages with a given string. It also includes special "beacon" logging for timing operations.
 """
 
-import os
 import logging
 import time
 from logging.handlers import RotatingFileHandler
@@ -28,7 +27,6 @@ except Exception as e:
         f"Warning: Failed to import google.cloud.logging: {e}. Google Cloud Logging functionality will be disabled."
     )
 
-LOGGING_FILE_PATH = os.environ.get("LOGGING_FILE_PATH", "logs.txt")
 
 # Module-level flag to ensure logging setup runs only once
 _logging_configured = False
@@ -105,7 +103,12 @@ class PrefixedLogger:
 
 
 def setup_logging(
-    logger_name="cloud_bear_logger", cloud_logger_name=None, enable_gcloud_logging=True
+    logger_name="chronolog",
+    cloud_logger_name=None,
+    enable_gcloud_logging=True,
+    log_file_path="logs.txt",
+    log_file_max_bytes=100 * 1024 * 1024,  # 100MB by default
+    log_file_backup_count=5,  # 5 backup files by default
 ):
     """
     Set up logging configuration with both cloud and file handlers.
@@ -116,6 +119,9 @@ def setup_logging(
         cloud_logger_name: Name for the cloud logging handler (used by Google Cloud Logging)
         enable_gcloud_logging: If True, attempts to set up Google Cloud Logging.
                                Set to False to avoid Google Cloud Logging initialization overhead.
+        log_file_path: Path to the log file for RotatingFileHandler.
+        log_file_max_bytes: Maximum size of the log file before rotation (in bytes).
+        log_file_backup_count: Number of backup log files to keep.
 
     Returns:
         Configured logger instance
@@ -131,7 +137,6 @@ def setup_logging(
     cloud_handler = None
     if enable_gcloud_logging and _GOOGLE_CLOUD_LOGGING_AVAILABLE:
         try:
-            # This is the line that caused the original slowdown due to subprocess calls
             client = google.cloud.logging.Client()
             cloud_handler = CloudLoggingHandler(
                 client, name=cloud_logger_name or logger_name
@@ -139,7 +144,7 @@ def setup_logging(
             handlers.append(cloud_handler)
         except Exception as e:
             print(
-                f"Warning: Could not initialize Google Cloud Logging. Functionality disabled: {e}"
+                f"Notice: Could not initialize Google Cloud Logging. Functionality disabled: {e}"
             )
     elif enable_gcloud_logging and not _GOOGLE_CLOUD_LOGGING_AVAILABLE:
         print(
@@ -147,16 +152,17 @@ def setup_logging(
         )
 
     rotation_handler = None
-    try:
-        rotation_handler = RotatingFileHandler(
-            LOGGING_FILE_PATH,
-            maxBytes=1024 * 1024 * 100,  # 100MB
-            backupCount=5,
-        )
-        handlers.append(rotation_handler)
-    except Exception as e:
-        print(f"Warning: Could not initialize file logging: {e}")
-        rotation_handler = None  # Ensure it's None if creation failed
+    if log_file_path is not None:
+        try:
+            rotation_handler = RotatingFileHandler(
+                log_file_path,
+                maxBytes=log_file_max_bytes,
+                backupCount=log_file_backup_count,
+            )
+            handlers.append(rotation_handler)
+        except Exception as e:
+            print("Info: RotatingFileHandler is not enabled.")
+            rotation_handler = None  # Ensure it's None if creation failed
 
     # Configure logging
     logging.basicConfig(
@@ -173,7 +179,13 @@ def setup_logging(
 
 
 def get_prefixed_logger(
-    logger_name, prefix=None, cloud_logger_name=None, enable_gcloud_logging=False
+    logger_name,
+    prefix=None,
+    cloud_logger_name=None,
+    enable_gcloud_logging=False,
+    log_file_path="logs.txt",
+    log_file_max_bytes=100 * 1024 * 1024,
+    log_file_backup_count=5,
 ):
     """
     Get a prefixed logger instance.
@@ -185,11 +197,19 @@ def get_prefixed_logger(
         cloud_logger_name: Name for the cloud logging handler (used by Google Cloud Logging)
         enable_gcloud_logging: If True, attempts to set up Google Cloud Logging.
                                Set to False to avoid Google Cloud Logging initialization overhead.
+        log_file_path: Path to the log file for RotatingFileHandler.
+        log_file_max_bytes: Maximum size of the log file before rotation.
+        log_file_backup_count: Number of backup log files to keep.
 
     Returns:
         PrefixedLogger instance
     """
     setup_logging(
-        logger_name, cloud_logger_name, enable_gcloud_logging=enable_gcloud_logging
+        logger_name,
+        cloud_logger_name,
+        enable_gcloud_logging=enable_gcloud_logging,
+        log_file_path=log_file_path,
+        log_file_max_bytes=log_file_max_bytes,
+        log_file_backup_count=log_file_backup_count,
     )
     return PrefixedLogger(logger_name, prefix)
