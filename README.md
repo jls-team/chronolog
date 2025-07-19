@@ -5,139 +5,107 @@
 [![Changelog](https://img.shields.io/github/v/release/jls-team/chronolog?include_prereleases&label=changelog)](https://github.com/jls-team/chronolog/releases)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/jls-team/chronolog/blob/main/LICENSE)
 
-Logger with elpased time calculation.
+A Python logger with elapsed time calculation, dynamic prefixes, and optional Google Cloud integration.
 
 ## Installation
 
-Install this library using `pip`:
+Install the library using `pip`.
+
+**From PyPI:**
 ```bash
 pip install chronolog
 ```
 
-Alternatively, you can install the latest version directly from GitHub:
+**With Google Cloud Logging support:**
+```bash
+pip install "chronolog[google]"
+```
 
+**For latest releases:**
+```bash
+pip install git+https://github.com/jls-team/chronolog.git
+```
+
+**For development:**
 ```bash
 git clone https://github.com/jls-team/chronolog.git
 cd chronolog
-pip install -e .
+pip install -e '.[test]'
 ```
+
 ## Usage
 
-The `chronolog` library provides a `PrefixedLogger` instance that automatically adds a configurable prefix to all log messages. It also includes special "beacon" logging for timing operations.
+The `chronolog` library provides a `PrefixedLogger` that automatically adds a configurable prefix to all log messages. It also includes special "beacon" logging for timing operations.
 
-To get a logger instance, use the `get_prefixed_logger` function:
+### Basic Logging
+
+To get a logger instance, use the `get_prefixed_logger` function.
 
 ```python
 from chronolog import get_prefixed_logger
-import time
 
-# Get a logger with a default prefix
+# Get a logger with a prefix
 log = get_prefixed_logger("my_app", prefix="APP")
 log.info("Application started.")
 
-# Log with debug level
-log.debug("Debug message here.")
-
-# Update the prefix dynamically
+# The prefix can be updated dynamically
 log.update_prefix("PROCESS_A")
 log.info("Processing data...")
-
-# Use beacon logging for timing operations
-log.log_start("data_processing", "Starting heavy data processing.")
-# Simulate some work
-time.sleep(0.1)
-log.log_end("data_processing", "Heavy data processing completed.")
-
-log.update_prefix("PROCESS_B")
 log.warning("Something might be wrong here.")
-log.error("An error occurred!")
 
 # Example of logging an exception
 try:
     1 / 0
 except ZeroDivisionError:
     log.exception("Division by zero attempt caught!")
+
+```
+Will produce result like this:
+```
+2025-07-19 15:53:14,339 - INFO - [APP] Application started.
+2025-07-19 15:53:14,339 - INFO - [PROCESS_A] Processing data...
+2025-07-19 15:53:14,339 - INFO - [PROCESS_A] (BEACON - [data_processing] - START) Starting heavy data processing.
+2025-07-19 15:53:14,444 - INFO - [PROCESS_A] (BEACON - [data_processing] - END (Elapsed time 0.11 s)) Heavy data processing completed.
+2025-07-19 15:53:14,444 - WARNING - [PROCESS_B] Something might be wrong here.
+2025-07-19 15:53:14,444 - ERROR - [PROCESS_B] An error occurred!
+2025-07-19 15:53:14,445 - ERROR - [PROCESS_B] Division by zero attempt caught!
+Traceback (most recent call last):
+  File "/Users/Liudas.Sodonis/Dev/tests/ch/main.py", line 27, in <module>
+    1 / 0
+    ~~^~~
+ZeroDivisionError: division by zero
 ```
 
-### File Logging Configuration
+### Beacon Logging for Timing
 
-By default, `chronolog` writes logs to a file named `logs.txt` (100MB max, 5 backups) and to the console. You can customize or disable the file logging via `get_prefixed_logger` parameters:
-
-**1. Disabling File Logging**
-
-To disable the `RotatingFileHandler` completely, set `log_file_path` to `None`:
+Use `log_start` and `log_end` to automatically log the elapsed time of an operation with `BEACON` prefix. This can be used for monitoring and performance analysis, since `BEACON` logs are designed to be easily parsed and aggregated.
 
 ```python
+import time
 from chronolog import get_prefixed_logger
 
-# Get a logger that only logs to the console (and Google Cloud if enabled)
-log_no_file = get_prefixed_logger("no_file_app", prefix="NO_FILE", log_file_path=None)
-log_no_file.info("This message will not be written to a local log file.")
+log = get_prefixed_logger("timed_app", prefix="TIMER")
+
+# Use a unique key to mark the start and end of an operation
+log.log_start("data_processing", "Starting heavy data processing.")
+
+# Simulate some work
+time.sleep(0.1)
+
+log.log_end("data_processing", "Heavy data processing completed.")
 ```
-
-**2. Customizing File Logging Properties**
-
-You can specify a custom log file path, maximum file size, and the number of backup files to keep:
-
-```python
-from chronolog import get_prefixed_logger
-import os
-
-# Define custom log file settings
-custom_log_path = os.path.join(os.getcwd(), "my_custom_app.log")
-custom_max_bytes = 5 * 1024 * 1024  # 5 MB
-custom_backup_count = 2 # Keep 2 backup files
-
-log_custom_file = get_prefixed_logger(
-    "custom_file_app",
-    prefix="CUSTOM_FILE",
-    log_file_path=custom_log_path,
-    log_file_max_bytes=custom_max_bytes,
-    log_file_backup_count=custom_backup_count,
-)
-log_custom_file.info("This log goes to a custom-configured file.")
+would result in a log message like:
+```log
+2025-02-19 16:17:41,419 - INFO - [TIMER] (BEACON - [data_processing] - START) Starting heavy data processing.
+2025-02-19 16:17:41,524 - INFO - [TIMER] (BEACON - [data_processing] - END (Elapsed time 0.11 s)) Heavy data processing completed.
 ```
+This will produce a log message that includes the total time spent between the `log_start` and `log_end` calls for the `data_processing` key.
 
 ## Configuration
 
-### Google Cloud Logging
-
-If you install the package with the `[google]` extra, logs will also be sent to Google Cloud Logging in addition to the local file.
-
-```bash
-pip install "chronolog[google]"
-```
-
-To initialize Google Cloud Logging explicitly (e.g., if you want to control the client name or prevent default initialization):
-
-```python
-from chronolog import get_prefixed_logger
-
-# This will attempt to set up Google Cloud Logging if 'google-cloud-logging' is installed.
-log = get_prefixed_logger(
-    "my_app",
-    prefix="CLOUD_ENABLED",
-    enable_gcloud_logging=True, # Set to True to enable GCloud logging
-    cloud_logger_name="my-gcp-logger-instance" # Optional: customize GCloud logger name
-)
-log.info("This message will go to Google Cloud Logging.")
-```
-
-If `enable_gcloud_logging` is set to `False` (default for `get_prefixed_logger`), Google Cloud Logging will not be initialized, even if the library is installed. This is useful for development or environments where cloud logging is not desired.
-
-### File Logging Parameters
-
-The `chronolog` library uses a `RotatingFileHandler` for local file logging. You can configure its behavior using the following parameters in the `setup_logging` or `get_prefixed_logger` functions:
-
-*   `log_file_path` (str, optional): The path to the log file.
-    *   If `None`, file logging is completely disabled.
-    *   Defaults to `logs.txt` if not provided.
-*   `log_file_max_bytes` (int, optional): The maximum size of the log file in bytes before it is rotated. Defaults to `100 * 1024 * 1024` (100 MB).
-*   `log_file_backup_count` (int, optional): The number of backup log files to keep. Defaults to `5`.
-
 ### Log Level
 
-By default, the logger is set to `INFO` level. You can change the level of the root logger (which `chronolog` configures) directly using Python's `logging` module.
+Set the desired log level using Python's standard `logging` module. The default level is `INFO`.
 
 ```python
 import logging
@@ -148,22 +116,76 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 log = get_prefixed_logger("debug_app", prefix="DEBUG")
 log.debug("This debug message will now be visible.")
-log.info("This info message is also visible.")
 ```
+
+### File Logging
+
+By default, `chronolog` writes to a rotating file named `logs.txt` (100MB max, 5 backups). You can customize or disable this feature.
+
+**1. Customizing the Log File**
+
+Provide custom settings for the path, max size, and backup count.
+
+```python
+from chronolog import get_prefixed_logger
+
+log_custom_file = get_prefixed_logger(
+    name="custom_file_app",
+    prefix="CUSTOM_FILE",
+    log_file_path="my_custom_app.log",
+    log_file_max_bytes=5 * 1024 * 1024,  # 5 MB
+    log_file_backup_count=2,
+)
+log_custom_file.info("This log goes to a custom-configured file.")
+```
+
+**2. Disabling File Logging**
+
+To log only to the console (and Google Cloud, if enabled), set `log_file_path` to `None`.
+
+```python
+from chronolog import get_prefixed_logger
+
+log_no_file = get_prefixed_logger("console_app", prefix="NO_FILE", log_file_path=None)
+log_no_file.info("This message will not be written to a local file.")
+```
+
+### Google Cloud Logging
+
+If you installed the library with the `[google]` extra, you can enable logging to Google Cloud.
+
+```python
+from chronolog import get_prefixed_logger
+
+# Set enable_gcloud_logging to True
+log = get_prefixed_logger(
+    name="my_gcp_app",
+    prefix="CLOUD_APP",
+    enable_gcloud_logging=True,
+    cloud_logger_name="my-gcp-logger-instance" # Optional: custom GCloud logger name
+)
+log.info("This message will be sent to Google Cloud Logging.")
+```
+If `enable_gcloud_logging` is `False` (the default), no logs will be sent to Google Cloud, even if the dependency is installed.
 
 ## Development
 
-To contribute to this library, first checkout the code. Then create a new virtual environment:
+To contribute to this library, set up a development environment.
+
+**1. Set up the virtual environment:**
 ```bash
+# Assumes you have already cloned the repository
 cd chronolog
 python -m venv venv
 source venv/bin/activate
 ```
-Now install the dependencies and test dependencies:
+
+**2. Install dependencies:**
 ```bash
-python -m pip install -e '.[test]'
+pip install -e '.[test]'
 ```
-To run the tests:
+
+**3. Run tests:**
 ```bash
 python -m pytest
 ```
