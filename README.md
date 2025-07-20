@@ -189,3 +189,5 @@ pip install -e '.[test]'
 ```bash
 python -m pytest
 ```
+
+Cookiecutter via [https://github.com/simonw/python-lib](https://github.com/simonw/python-lib)
